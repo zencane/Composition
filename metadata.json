@@ -1,0 +1,5 @@
+{
+  "name": "Valorant Premier Agent Pool Visualiser",
+  "description": "Roster and map composition manager for Valorant Premier teams, allowing users to define player agent pools and map-specific compositions.",
+  "requestFramePermissions": []
+}
