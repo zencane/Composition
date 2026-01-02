@@ -223,7 +223,7 @@ const App: React.FC = () => {
         </div>
         <div className="shrink-0">
           <img 
-            src="media/premierlogo2.png" 
+            src="https://raw.githubusercontent.com/zencane/Composition/refs/heads/main/media/premierlogo2.png" 
             alt="Premier Logo"
             className="h-24 md:h-32 w-auto drop-shadow-[0_0_20px_rgba(255,70,85,0.4)] transition-all duration-300" 
             onError={(e) => {
