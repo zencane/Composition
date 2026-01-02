@@ -1,4 +1,4 @@
 node_modules
 dist
 .env
-media/premierlogo2.png
+media/*
