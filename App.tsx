@@ -15,15 +15,23 @@ const PREMIER_SCHEDULE = [
   { week: '07', name: 'Haven', dates: 'FEB 25 — 28', color: '#B2FF9E' },
 ];
 
+const STORAGE_KEYS = {
+  TEAM_NAME: 'valorant_team_name',
+  ROSTER_MAIN: 'valorant_roster_main',
+  ROSTER_SUBS: 'valorant_roster_subs',
+  MAP_COMPS: 'valorant_map_comps',
+  ACTIVE_MAPS: 'valorant_active_maps'
+};
+
 const App: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [maps, setMaps] = useState<MapData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCompVisible, setIsCompVisible] = useState(false);
-  const [copyFeedback, setCopyFeedback] = useState(false);
-  const [isFromShare, setIsFromShare] = useState(false);
+  const [isDataModalOpen, setIsDataModalOpen] = useState(false);
+  const isResetting = useRef(false);
   
-  const [teamName, setTeamName] = useState(() => localStorage.getItem('valorant_team_name') || 'MY TEAM');
+  const [teamName, setTeamName] = useState(() => localStorage.getItem(STORAGE_KEYS.TEAM_NAME) || 'MY TEAM');
   const [isEditingTeamName, setIsEditingTeamName] = useState(false);
   const teamInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,40 +40,30 @@ const App: React.FC = () => {
   const [mapComps, setMapComps] = useState<MapComposition[]>([]);
   const [activeMapIds, setActiveMapIds] = useState<string[]>([]);
 
-  // Key mapping to shorten the "jibberish" URL
-  // n: teamName, m: mainRoster, s: subRoster, c: mapComps, a: activeMapIds
-  const getShareableLink = () => {
-    const minifiedState = {
-      n: teamName,
-      m: mainRoster,
-      s: subRoster,
-      c: mapComps,
-      a: activeMapIds
-    };
-    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(minifiedState))));
-    // Use origin + pathname to ensure we get a clean URL (not a blob URL)
-    const baseUrl = window.location.origin + window.location.pathname;
-    return `${baseUrl}#share=${encoded}`;
-  };
+  const initDefaultState = useCallback((sortedMaps: MapData[]) => {
+    setTeamName('MY TEAM');
+    setMainRoster(Array.from({ length: 5 }, (_, i) => ({
+      id: `main-${i}`,
+      name: `Player ${i + 1}`,
+      agentPool: [],
+      isMain: true
+    })));
+    setSubRoster([
+      { id: `sub-${Date.now()}-0`, name: '', agentPool: [], isMain: false },
+      { id: `sub-${Date.now()}-1`, name: '', agentPool: [], isMain: false }
+    ]);
+    const scheduledNames = PREMIER_SCHEDULE.map(s => s.name.toLowerCase());
+    const initialActive = sortedMaps.filter(m => scheduledNames.includes(m.displayName.toLowerCase())).map(m => m.uuid);
+    setActiveMapIds(initialActive);
+    
+    const defaultComps = sortedMaps.map(map => ({
+      mapId: map.uuid,
+      slots: Array.from({ length: 5 }, (_, i) => ({ playerId: `main-${i}`, agentId: '' }))
+    }));
+    setMapComps(defaultComps);
+  }, []);
 
-  const handleShare = () => {
-    const link = getShareableLink();
-    navigator.clipboard.writeText(link);
-    setCopyFeedback(true);
-    setTimeout(() => setCopyFeedback(false), 2000);
-  };
-
-  const saveSharedToLocal = () => {
-    localStorage.setItem('valorant_team_name', teamName);
-    localStorage.setItem('valorant_roster_main', JSON.stringify(mainRoster));
-    localStorage.setItem('valorant_roster_subs', JSON.stringify(subRoster));
-    localStorage.setItem('valorant_map_comps', JSON.stringify(mapComps));
-    localStorage.setItem('valorant_active_maps', JSON.stringify(activeMapIds));
-    window.location.hash = '';
-    setIsFromShare(false);
-    window.location.reload();
-  };
-
+  // Initialize Data
   useEffect(() => {
     const init = async () => {
       try {
@@ -82,61 +80,22 @@ const App: React.FC = () => {
         });
         setMaps(sortedMaps);
 
-        const hash = window.location.hash;
-        let restoredState = null;
-        if (hash.startsWith('#share=')) {
-          try {
-            const encoded = hash.split('#share=')[1];
-            const raw = JSON.parse(decodeURIComponent(escape(atob(encoded))));
-            // Map back from short keys
-            restoredState = {
-              teamName: raw.n,
-              mainRoster: raw.m,
-              subRoster: raw.s,
-              mapComps: raw.c,
-              activeMapIds: raw.a
-            };
-            setIsFromShare(true);
-          } catch (e) {
-            console.error("Failed to restore shared state", e);
-          }
-        }
+        const savedMain = localStorage.getItem(STORAGE_KEYS.ROSTER_MAIN);
+        const savedSub = localStorage.getItem(STORAGE_KEYS.ROSTER_SUBS);
+        const savedActive = localStorage.getItem(STORAGE_KEYS.ACTIVE_MAPS);
+        const savedCompsRaw = localStorage.getItem(STORAGE_KEYS.MAP_COMPS);
 
-        if (restoredState) {
-          setTeamName(restoredState.teamName);
-          setMainRoster(restoredState.mainRoster);
-          setSubRoster(restoredState.subRoster);
-          setMapComps(restoredState.mapComps);
-          setActiveMapIds(restoredState.activeMapIds);
-        } else {
-          const savedMain = localStorage.getItem('valorant_roster_main');
-          setMainRoster(savedMain ? JSON.parse(savedMain) : Array.from({ length: 5 }, (_, i) => ({
-            id: `main-${i}`,
-            name: `Player ${i + 1}`,
-            agentPool: [],
-            isMain: true
-          })));
-
-          const savedSub = localStorage.getItem('valorant_roster_subs');
-          setSubRoster(savedSub ? JSON.parse(savedSub) : [
-            { id: `sub-${Date.now()}-0`, name: '', agentPool: [], isMain: false },
-            { id: `sub-${Date.now()}-1`, name: '', agentPool: [], isMain: false }
-          ]);
-
-          const savedActive = localStorage.getItem('valorant_active_maps');
-          if (savedActive) {
-            setActiveMapIds(JSON.parse(savedActive));
-          } else {
-            const scheduledNames = PREMIER_SCHEDULE.map(s => s.name.toLowerCase());
-            setActiveMapIds(sortedMaps.filter(m => scheduledNames.includes(m.displayName.toLowerCase())).map(m => m.uuid));
-          }
-
-          const savedCompsRaw = localStorage.getItem('valorant_map_comps');
-          const currentComps = savedCompsRaw ? JSON.parse(savedCompsRaw) : [];
+        if (savedMain && savedSub && savedActive && savedCompsRaw) {
+          setMainRoster(JSON.parse(savedMain));
+          setSubRoster(JSON.parse(savedSub));
+          setActiveMapIds(JSON.parse(savedActive));
+          const currentComps = JSON.parse(savedCompsRaw);
           setMapComps(sortedMaps.map(map => {
             const existing = currentComps.find((c: any) => c.mapId === map.uuid);
             return existing || { mapId: map.uuid, slots: Array.from({ length: 5 }, (_, i) => ({ playerId: `main-${i}`, agentId: '' })) };
           }));
+        } else {
+          initDefaultState(sortedMaps);
         }
       } catch (error) {
         console.error("Failed to load Valorant data", error);
@@ -145,16 +104,17 @@ const App: React.FC = () => {
       }
     };
     init();
-  }, []);
+  }, [initDefaultState]);
 
+  // Save to LocalStorage
   useEffect(() => {
-    if (loading || isFromShare) return;
-    localStorage.setItem('valorant_team_name', teamName);
-    localStorage.setItem('valorant_roster_main', JSON.stringify(mainRoster));
-    localStorage.setItem('valorant_roster_subs', JSON.stringify(subRoster));
-    localStorage.setItem('valorant_map_comps', JSON.stringify(mapComps));
-    localStorage.setItem('valorant_active_maps', JSON.stringify(activeMapIds));
-  }, [teamName, mainRoster, subRoster, mapComps, activeMapIds, loading, isFromShare]);
+    if (loading || isResetting.current) return;
+    localStorage.setItem(STORAGE_KEYS.TEAM_NAME, teamName);
+    localStorage.setItem(STORAGE_KEYS.ROSTER_MAIN, JSON.stringify(mainRoster));
+    localStorage.setItem(STORAGE_KEYS.ROSTER_SUBS, JSON.stringify(subRoster));
+    localStorage.setItem(STORAGE_KEYS.MAP_COMPS, JSON.stringify(mapComps));
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_MAPS, JSON.stringify(activeMapIds));
+  }, [teamName, mainRoster, subRoster, mapComps, activeMapIds, loading]);
 
   const updatePlayerName = useCallback((id: string, name: string) => {
     const update = (prev: Player[]) => prev.map(p => p.id === id ? { ...p, name } : p);
@@ -185,6 +145,62 @@ const App: React.FC = () => {
     setActiveMapIds(prev => prev.includes(mapId) ? prev.filter(id => id !== mapId) : [...prev, mapId]);
   };
 
+  const resetTeam = () => {
+    if (!confirm("Are you sure? This will delete all your customized roster names, agent pools, and map compositions.")) return;
+    
+    isResetting.current = true;
+    
+    // 1. Clear Storage
+    Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+    
+    // 2. Reset internal state immediately
+    initDefaultState(maps);
+    
+    // 3. Close Modal
+    setIsDataModalOpen(false);
+    
+    // 4. Force a clean refresh to ensure all effects are cleared
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
+  };
+
+  const exportToJson = () => {
+    const data = { teamName, mainRoster, subRoster, mapComps, activeMapIds };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${teamName.replace(/\s+/g, '_')}_Premier_Comp.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importFromJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        applyData(data);
+      } catch (err) {
+        alert("Invalid team data file.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const applyData = (data: any) => {
+    if (data.teamName) setTeamName(data.teamName);
+    if (data.mainRoster) setMainRoster(data.mainRoster);
+    if (data.subRoster) setSubRoster(data.subRoster);
+    if (data.mapComps) setMapComps(data.mapComps);
+    if (data.activeMapIds) setActiveMapIds(data.activeMapIds);
+    setIsDataModalOpen(false);
+  };
+
   const allPlayers = useMemo(() => [...mainRoster, ...subRoster], [mainRoster, subRoster]);
   const activeMaps = useMemo(() => maps.filter(m => activeMapIds.includes(m.uuid)), [maps, activeMapIds]);
 
@@ -192,31 +208,52 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-[1800px] mx-auto space-y-12 pb-24">
-      {/* Shared State Banner */}
-      {isFromShare && (
-        <div className="fixed top-0 left-0 right-0 z-[100] bg-[#ff4655] text-white py-3 px-6 flex justify-between items-center shadow-2xl border-b border-white/20">
-          <div className="flex items-center gap-4">
-            <div className="bg-white/20 p-1.5 rounded-full">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      {/* Team Data Modal */}
+      {isDataModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#0f1923]/95 backdrop-blur-sm" onClick={() => setIsDataModalOpen(false)}></div>
+          <div className="relative bg-[#16202a] border-2 border-white/10 w-full max-w-xl rounded-sm p-8 shadow-2xl space-y-8 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-start">
+              <div className="space-y-1">
+                <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">Team Data Manager</h2>
+                <p className="text-gray-400 text-xs font-bold uppercase tracking-widest opacity-60">Manage your local storage</p>
+              </div>
+              <button onClick={() => setIsDataModalOpen(false)} className="text-gray-500 hover:text-white transition-colors p-1">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
             </div>
-            <div className="flex flex-col">
-              <span className="font-black uppercase tracking-widest text-xs leading-none">Shared View Only</span>
-              <span className="text-[10px] opacity-80 uppercase font-bold tracking-tighter">Changes won't save unless you import.</span>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="flex flex-col gap-4">
+                <h3 className="text-xs font-black uppercase text-[#ff4655] tracking-widest border-b border-white/5 pb-2 text-white">File Operations</h3>
+                <button onClick={exportToJson} className="w-full py-5 px-6 bg-white/5 border border-white/10 rounded-sm text-left hover:bg-white/10 transition-all flex items-center justify-between group">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-black uppercase tracking-widest text-white">Export Config</span>
+                    <span className="text-[10px] text-gray-500 font-bold uppercase">Download as JSON</span>
+                  </div>
+                  <svg className="w-5 h-5 opacity-40 group-hover:translate-y-1 transition-transform text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M7 10l5 5m0 0l5-5m-5 5V3" /></svg>
+                </button>
+                <label className="w-full py-5 px-6 bg-white/5 border border-white/10 rounded-sm text-left hover:bg-white/10 transition-all flex items-center justify-between group cursor-pointer">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-black uppercase tracking-widest text-white">Import Config</span>
+                    <span className="text-[10px] text-gray-500 font-bold uppercase">Upload JSON file</span>
+                  </div>
+                  <svg className="w-5 h-5 opacity-40 group-hover:-translate-y-1 transition-transform text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M7 9l5-5m0 0l5 5m-5-5v12" /></svg>
+                  <input type="file" className="hidden" accept=".json" onChange={importFromJson} />
+                </label>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <h3 className="text-xs font-black uppercase text-[#ff4655] tracking-widest border-b border-white/5 pb-2">Danger Zone</h3>
+                <p className="text-[10px] text-gray-400 font-bold uppercase leading-relaxed">
+                  Resetting will wipe all player names, agent pools, and map compositions. This action is permanent.
+                </p>
+                <button onClick={resetTeam} className="w-full py-5 px-6 bg-red-600/10 border border-red-600/30 rounded-sm text-left hover:bg-red-600 text-red-500 hover:text-white transition-all flex items-center justify-between group">
+                  <span className="text-xs font-black uppercase tracking-widest">Reset All Data</span>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="flex gap-3">
-            <button 
-              onClick={saveSharedToLocal}
-              className="bg-white text-[#ff4655] px-4 py-1.5 rounded-sm text-[11px] font-black uppercase tracking-[0.1em] hover:bg-gray-100 transition-all shadow-lg active:scale-95"
-            >
-              Import to My Browser
-            </button>
-            <button 
-              onClick={() => { window.location.hash = ''; window.location.reload(); }}
-              className="bg-black/40 text-white px-4 py-1.5 rounded-sm text-[11px] font-black uppercase tracking-[0.1em] hover:bg-black/60 transition-all border border-white/20"
-            >
-              Discard & Close
-            </button>
           </div>
         </div>
       )}
@@ -243,15 +280,13 @@ const App: React.FC = () => {
                 </span>
               )}
             </h1>
-            {!isFromShare && (
-              <button 
-                onClick={handleShare}
-                className={`px-6 py-2.5 rounded-sm border-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-2 ${copyFeedback ? 'bg-green-600 border-green-600 text-white' : 'bg-[#ff4655]/10 border-[#ff4655]/30 text-[#ff4655] hover:bg-[#ff4655] hover:text-white shadow-[0_0_15px_rgba(255,70,85,0.1)] hover:shadow-[0_0_20px_rgba(255,70,85,0.3)]'}`}
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-                {copyFeedback ? 'Link Copied!' : 'Copy Share Link'}
-              </button>
-            )}
+            <button 
+              onClick={() => setIsDataModalOpen(true)}
+              className="px-6 py-2.5 rounded-sm border-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-2 bg-[#ff4655]/10 border-[#ff4655]/30 text-[#ff4655] hover:bg-[#ff4655] hover:text-white shadow-[0_0_15px_rgba(255,70,85,0.1)] hover:shadow-[0_0_20px_rgba(255,70,85,0.3)]"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+              Manage Data
+            </button>
           </div>
         </div>
         <div className="shrink-0">
@@ -280,9 +315,7 @@ const App: React.FC = () => {
             <h2 className="text-xl font-black uppercase tracking-widest flex items-center gap-3 text-white">
               <span className="w-2 h-6 bg-gray-500"></span> Substitutes
             </h2>
-            {!isFromShare && (
-              <button onClick={() => setSubRoster(prev => [...prev, { id: `sub-${Date.now()}`, name: '', agentPool: [], isMain: false }])} className="px-4 py-2 rounded bg-[#ff4655]/10 border border-[#ff4655]/30 text-[#ff4655] text-[10px] font-black uppercase hover:bg-[#ff4655] hover:text-white transition-all">+ Add Sub</button>
-            )}
+            <button onClick={() => setSubRoster(prev => [...prev, { id: `sub-${Date.now()}`, name: '', agentPool: [], isMain: false }])} className="px-4 py-2 rounded bg-[#ff4655]/10 border border-[#ff4655]/30 text-[#ff4655] text-[10px] font-black uppercase hover:bg-[#ff4655] hover:text-white transition-all">+ Add Sub</button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {subRoster.map(player => (
@@ -293,11 +326,9 @@ const App: React.FC = () => {
       </section>
 
       <section className="space-y-8 pt-12 border-t border-gray-800">
-        <div className="flex flex-col gap-8">
-          <div className="text-center space-y-2">
+        <div className="flex flex-col gap-8 text-center">
             <h2 className="text-6xl md:text-7xl font-black uppercase tracking-widest italic text-white leading-none">EPISODE 2026 ACT I</h2>
             <p className="text-lg font-bold text-[#ff4655] tracking-[0.5em] uppercase">Premier Schedule Selection</p>
-          </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 w-full px-4 md:px-0">
             {maps.map(map => {
@@ -309,13 +340,12 @@ const App: React.FC = () => {
               return (
                 <button
                   key={map.uuid}
-                  disabled={isFromShare}
                   onClick={() => toggleMapActive(map.uuid)}
                   className={`group relative flex h-72 flex-col rounded-sm overflow-hidden border-2 transition-all duration-500 ${
                     isActive 
                       ? 'border-white scale-[1.04] shadow-[0_25px_60px_rgba(255,70,85,0.4)] z-20' 
                       : 'border-white/10 hover:border-white/30'
-                  } bg-[#1a252e] ${isFromShare ? 'cursor-default' : 'cursor-pointer'}`}
+                  } bg-[#1a252e]`}
                 >
                   <div className="absolute inset-0 z-0">
                     <img 
@@ -329,31 +359,18 @@ const App: React.FC = () => {
                     />
                   </div>
                   
-                  <div className={`absolute inset-0 z-10 transition-opacity duration-500 ${isActive ? 'bg-gradient-to-tr from-black via-black/40 to-transparent opacity-100' : 'bg-gradient-to-t from-black via-black/40 to-transparent opacity-60'}`}></div>
-                  
+                  <div className={`absolute inset-0 z-10 transition-opacity duration-500 ${isActive ? 'bg-gradient-to-tr from-black via-black/50 to-transparent opacity-100' : 'bg-gradient-to-t from-black via-black/40 to-transparent opacity-60'}`}></div>
                   <div className="h-2.5 w-full z-20 shrink-0" style={{ backgroundColor: accentColor }}></div>
-                  
                   <div className="relative z-20 flex-1 flex flex-col justify-end p-5 text-left">
                     <div className="mb-2">
                       <span className={`text-[10px] md:text-xs font-black tracking-[0.2em] uppercase transition-all drop-shadow-lg ${isActive ? 'text-[#ff4655]' : 'text-white/80'}`}>
                         {isScheduled ? `WEEK ${scheduleInfo.week}` : 'OFF POOL'}
                       </span>
                     </div>
-                    <h3 className={`text-xl md:text-2xl lg:text-3xl font-black uppercase italic tracking-tighter leading-none transition-all drop-shadow-[0_4px_12px_rgba(0,0,0,1)] ${isActive ? 'text-white scale-105 origin-left' : 'text-white/90'}`}>
+                    <h3 className={`text-xl md:text-2xl font-black uppercase italic tracking-tighter leading-none transition-all drop-shadow-[0_4px_12px_rgba(0,0,0,1)] text-white ${isActive ? 'scale-105 origin-left' : ''}`}>
                       {map.displayName}
                     </h3>
-                    <div className="mt-3">
-                       <span className={`text-[10px] font-bold tracking-[0.2em] uppercase transition-all drop-shadow-md ${isActive ? 'text-white border-b-2 border-[#ff4655] pb-1' : 'text-white/90'}`}>
-                        {scheduleInfo?.dates || 'NOT IN SCHEDULE'}
-                      </span>
-                    </div>
                   </div>
-
-                  {isActive && (
-                    <div className="absolute top-6 right-6 bg-[#ff4655] px-2.5 py-1 rounded-sm shadow-xl z-20">
-                      <span className="text-[10px] font-black text-white uppercase tracking-widest">Active</span>
-                    </div>
-                  )}
                 </button>
               );
             })}
@@ -362,10 +379,8 @@ const App: React.FC = () => {
 
         <div className="space-y-12 pt-12">
           <div className="flex flex-col items-center gap-6">
-             <div className="h-px w-1/3 bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
-             <button onClick={() => setIsCompVisible(!isCompVisible)} className={`w-full max-w-2xl py-6 rounded-sm border transition-all duration-500 group flex flex-col items-center gap-1.5 ${isCompVisible ? 'bg-[#1a252e] border-[#ff4655]/60 text-[#ff4655] shadow-[0_0_20px_rgba(255,70,85,0.05)]' : 'bg-[#1a252e]/40 border-gray-800 text-gray-500 hover:border-gray-600 hover:text-white'}`}>
+             <button onClick={() => setIsCompVisible(!isCompVisible)} className={`w-full max-w-2xl py-6 rounded-sm border transition-all duration-500 group flex flex-col items-center gap-1.5 ${isCompVisible ? 'bg-[#1a252e] border-[#ff4655]/60 text-[#ff4655]' : 'bg-[#1a252e]/40 border-gray-800 text-gray-500 hover:text-white'}`}>
                 <span className="text-base font-black uppercase tracking-[0.5em] italic">{isCompVisible ? 'Close Composition Picker' : 'Open Composition Picker'}</span>
-                <div className={`h-[2px] bg-[#ff4655] transition-all duration-700 ease-out ${isCompVisible ? 'w-48 opacity-100' : 'w-8 opacity-20 group-hover:w-24 group-hover:opacity-100'}`}></div>
               </button>
           </div>
           {isCompVisible && (
