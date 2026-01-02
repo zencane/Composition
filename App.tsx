@@ -100,7 +100,8 @@ const App: React.FC = () => {
       } catch (error) {
         console.error("Failed to load Valorant data", error);
       } finally {
-        setLoading(false);
+        // Short delay to ensure browser paints a bit more smoothly
+        setTimeout(() => setLoading(false), 200);
       }
     };
     init();
@@ -149,17 +150,9 @@ const App: React.FC = () => {
     if (!confirm("Are you sure? This will delete all your customized roster names, agent pools, and map compositions.")) return;
     
     isResetting.current = true;
-    
-    // 1. Clear Storage
     Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
-    
-    // 2. Reset internal state immediately
     initDefaultState(maps);
-    
-    // 3. Close Modal
     setIsDataModalOpen(false);
-    
-    // 4. Force a clean refresh to ensure all effects are cleared
     setTimeout(() => {
       window.location.reload();
     }, 100);
@@ -204,10 +197,25 @@ const App: React.FC = () => {
   const allPlayers = useMemo(() => [...mainRoster, ...subRoster], [mainRoster, subRoster]);
   const activeMaps = useMemo(() => maps.filter(m => activeMapIds.includes(m.uuid)), [maps, activeMapIds]);
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0f1923] flex flex-col items-center justify-center p-8 text-center space-y-6">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-[#ff4655]/20 border-t-[#ff4655] rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-2 h-2 bg-[#ff4655] rounded-full animate-pulse"></div>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-black uppercase italic tracking-[0.2em] text-white">Initializing Roster</h2>
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest animate-pulse">Fetching latest Agents and Maps...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen p-4 md:p-8 max-w-[1800px] mx-auto space-y-12 pb-24">
+    <div className="min-h-screen bg-[#0f1923] p-4 md:p-8 max-w-[1800px] mx-auto space-y-12 pb-24 animate-in fade-in duration-700">
       {/* Team Data Modal */}
       {isDataModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -258,11 +266,12 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-gray-800 pb-8">
+      {/* Header with min-height to prevent layout jump */}
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-gray-800 pb-8 min-h-[120px]">
         <div className="flex flex-col max-w-3xl">
           <span className="text-[#ff4655] text-xs font-black tracking-[0.4em] uppercase mb-2">Team Composition Visualiser</span>
           <div className="flex flex-wrap items-center gap-4 md:gap-8">
-            <h1 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter text-white drop-shadow-md leading-none">
+            <h1 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter text-white drop-shadow-md leading-none min-w-[200px]">
               {isEditingTeamName ? (
                 <input
                   ref={teamInputRef}
@@ -289,11 +298,12 @@ const App: React.FC = () => {
             </button>
           </div>
         </div>
-        <div className="shrink-0">
+        <div className="shrink-0 min-h-[96px] md:min-h-[128px] w-auto">
           <img 
             src="https://raw.githubusercontent.com/zencane/Composition/refs/heads/main/media/premierlogo2.png" 
             alt="Premier Logo"
-            className="h-24 md:h-32 w-auto drop-shadow-[0_0_20px_rgba(255,70,85,0.4)]" 
+            className="h-24 md:h-32 w-auto drop-shadow-[0_0_20px_rgba(255,70,85,0.4)] transition-opacity duration-1000" 
+            onLoad={(e) => (e.target as HTMLImageElement).classList.add('opacity-100')}
             onError={(e) => (e.target as HTMLImageElement).src = "https://placehold.co/200x200/0f1923/ff4655?text=PREMIER"}
           />
         </div>
