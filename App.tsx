@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Player, Agent, MapData, MapComposition } from './types';
 import { fetchAgents, fetchMaps } from './services/valorantApi';
@@ -33,12 +32,11 @@ const App: React.FC = () => {
   const [subRoster, setSubRoster] = useState<Player[]>(() => {
     const saved = localStorage.getItem('valorant_roster_subs');
     if (saved) return JSON.parse(saved);
-    return Array.from({ length: 2 }, (_, i) => ({
-      id: `sub-${i}`,
-      name: '',
-      agentPool: [],
-      isMain: false
-    }));
+    // Explicitly returning default empty slots ensures visibility on first load
+    return [
+      { id: `sub-${Date.now()}-0`, name: '', agentPool: [], isMain: false },
+      { id: `sub-${Date.now()}-1`, name: '', agentPool: [], isMain: false }
+    ];
   });
 
   const [mapComps, setMapComps] = useState<MapComposition[]>(() => {
@@ -61,17 +59,25 @@ const App: React.FC = () => {
         setAgents(agentsData);
         setMaps(mapsData);
 
-        const savedComps = localStorage.getItem('valorant_map_comps');
-        if (!savedComps) {
-          const initialComps = mapsData.map(map => ({
+        const savedCompsRaw = localStorage.getItem('valorant_map_comps');
+        const currentComps: MapComposition[] = savedCompsRaw ? JSON.parse(savedCompsRaw) : [];
+
+        // Auto-fill logic: if a map has no saved composition, assign main roster IDs by default
+        const updatedComps = mapsData.map(map => {
+          const existing = currentComps.find(c => c.mapId === map.uuid);
+          if (existing && existing.slots && existing.slots.length === 5) {
+            return existing;
+          }
+          return {
             mapId: map.uuid,
             slots: Array.from({ length: 5 }, (_, i) => ({
-              playerId: `main-${i}`,
+              playerId: `main-${i}`, // Links to the default mainRoster IDs
               agentId: ''
             }))
-          }));
-          setMapComps(initialComps);
-        }
+          };
+        });
+        
+        setMapComps(updatedComps);
         
         const savedActive = localStorage.getItem('valorant_active_maps');
         if (savedActive === null) {
@@ -138,6 +144,24 @@ const App: React.FC = () => {
     else setSubRoster(update);
   }, []);
 
+  const addSubstitute = () => {
+    const newSub: Player = {
+      id: `sub-${Date.now()}`,
+      name: '',
+      agentPool: [],
+      isMain: false
+    };
+    setSubRoster(prev => [...prev, newSub]);
+  };
+
+  const removeSubstitute = (id: string) => {
+    setSubRoster(prev => prev.filter(p => p.id !== id));
+    setMapComps(prev => prev.map(comp => ({
+      ...comp,
+      slots: comp.slots.map(slot => slot.playerId === id ? { ...slot, playerId: '', agentId: '' } : slot)
+    })));
+  };
+
   const updateMapSlot = useCallback((mapId: string, index: number, playerId: string, agentId: string) => {
     setMapComps(prev => {
       const existing = prev.find(c => c.mapId === mapId);
@@ -155,13 +179,6 @@ const App: React.FC = () => {
     setActiveMapIds(prev => 
       prev.includes(mapId) ? prev.filter(id => id !== mapId) : [...prev, mapId]
     );
-  };
-
-  const handleHidePicker = () => {
-    setIsCompVisible(false);
-    setTimeout(() => {
-      smartViewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 150);
   };
 
   const allPlayers = useMemo(() => [...mainRoster, ...subRoster], [mainRoster, subRoster]);
@@ -206,19 +223,19 @@ const App: React.FC = () => {
         </div>
         <div className="shrink-0">
           <img 
-            src="https://raw.githubusercontent.com/zencane/Composition/refs/heads/main/media/premierlogo2.png" 
-            alt="Premier Logo" 
-            className="h-20 md:h-28 w-auto drop-shadow-[0_0_15px_rgba(255,70,85,0.2)]" 
+            src="media/premierlogo2.png" 
+            alt="Premier Logo"
+            className="h-24 md:h-32 w-auto drop-shadow-[0_0_20px_rgba(255,70,85,0.4)] transition-all duration-300" 
             onError={(e) => {
-              // Hide the image if it fails to load
-              (e.target as HTMLImageElement).style.display = 'none';
+              console.error("Premier logo failed to load at media/premierlogo2.png");
+              (e.target as HTMLImageElement).src = "https://placehold.co/200x200/0f1923/ff4655?text=PREMIER";
             }}
           />
         </div>
       </header>
 
       <section className="space-y-12">
-        <div className="space-y-4">
+        <div className="space-y-6">
           <h2 className="text-xl font-black uppercase tracking-widest flex items-center gap-3">
             <span className="w-2 h-6 bg-[#ff4655]"></span> Main Roster
           </h2>
@@ -233,6 +250,38 @@ const App: React.FC = () => {
               />
             ))}
           </div>
+        </div>
+
+        <div className="space-y-6 pt-6 border-t border-gray-800/30">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-black uppercase tracking-widest flex items-center gap-3">
+              <span className="w-2 h-6 bg-gray-500"></span> Substitutes
+            </h2>
+            <button 
+              onClick={addSubstitute}
+              className="px-4 py-2 rounded bg-[#ff4655]/10 border border-[#ff4655]/30 text-[#ff4655] text-[10px] font-black uppercase hover:bg-[#ff4655] hover:text-white transition-all"
+            >
+              + Add Sub
+            </button>
+          </div>
+          {subRoster.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              {subRoster.map(player => (
+                <PlayerSlot 
+                  key={player.id} 
+                  player={player} 
+                  allAgents={agents}
+                  onUpdateName={updatePlayerName}
+                  onToggleAgent={toggleAgentInPool}
+                  onRemove={removeSubstitute}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="py-8 text-center bg-[#1f2933]/20 rounded border border-dashed border-gray-800">
+              <p className="text-gray-600 text-xs font-bold uppercase tracking-widest">No substitutes added</p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -262,19 +311,28 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="space-y-6 pt-12">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-black uppercase tracking-widest">Map Compositions</h2>
-            <button 
-              onClick={() => setIsCompVisible(!isCompVisible)}
-              className="px-6 py-2 rounded bg-[#1a252e] border border-gray-700 text-gray-300 text-xs font-black uppercase hover:border-[#ff4655]"
-            >
-              {isCompVisible ? 'Hide Picker' : 'Show Picker'}
-            </button>
+        <div className="space-y-10 pt-12">
+          <div className="flex flex-col items-center gap-6">
+             <div className="h-0.5 w-1/4 bg-gradient-to-r from-transparent via-[#ff4655]/20 to-transparent"></div>
+             
+             {/* THE SUBTLE WIDE BUTTON */}
+             <button 
+                onClick={() => setIsCompVisible(!isCompVisible)}
+                className={`w-full max-w-2xl py-4 rounded border transition-all duration-500 group flex flex-col items-center gap-1.5 ${
+                  isCompVisible 
+                    ? 'bg-[#1a252e] border-[#ff4655]/40 text-[#ff4655]' 
+                    : 'bg-[#1a252e]/50 border-gray-800 text-gray-500 hover:border-[#ff4655]/30 hover:text-white'
+                }`}
+              >
+                <span className="text-xs font-black uppercase tracking-[0.4em] italic">
+                  {isCompVisible ? 'Close Composition Picker' : 'Open Composition Picker'}
+                </span>
+                <div className={`h-[1px] bg-[#ff4655] transition-all duration-700 ${isCompVisible ? 'w-24 opacity-100' : 'w-6 opacity-30 group-hover:w-12 group-hover:opacity-100'}`}></div>
+              </button>
           </div>
           
           {isCompVisible && (
-            <div className="grid gap-8">
+            <div className="grid gap-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {maps.filter(m => activeMapIds.includes(m.uuid)).map(map => (
                 <MapCompRow 
                   key={map.uuid}
