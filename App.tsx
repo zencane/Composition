@@ -100,8 +100,8 @@ const App: React.FC = () => {
       } catch (error) {
         console.error("Failed to load Valorant data", error);
       } finally {
-        // Short delay to ensure browser paints a bit more smoothly
-        setTimeout(() => setLoading(false), 200);
+        // Use a slightly longer delay to ensure the browser has parsed the initial data paint
+        setTimeout(() => setLoading(false), 400);
       }
     };
     init();
@@ -215,7 +215,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f1923] p-4 md:p-8 max-w-[1800px] mx-auto space-y-12 pb-24 animate-in fade-in duration-700">
+    <div className="min-h-screen bg-[#0f1923] p-4 md:p-8 max-w-[1800px] mx-auto space-y-12 pb-24 animate-fade-in">
       {/* Team Data Modal */}
       {isDataModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -266,9 +266,9 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Header with min-height to prevent layout jump */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-gray-800 pb-8 min-h-[120px]">
-        <div className="flex flex-col max-w-3xl">
+      {/* Header with fixed height and stable structure to prevent layout jump */}
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-gray-800 pb-8 min-h-[180px] md:min-h-[140px] w-full">
+        <div className="flex flex-col max-w-3xl flex-grow">
           <span className="text-[#ff4655] text-xs font-black tracking-[0.4em] uppercase mb-2">Team Composition Visualiser</span>
           <div className="flex flex-wrap items-center gap-4 md:gap-8">
             <h1 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter text-white drop-shadow-md leading-none min-w-[200px]">
@@ -298,13 +298,13 @@ const App: React.FC = () => {
             </button>
           </div>
         </div>
-        <div className="shrink-0 min-h-[96px] md:min-h-[128px] w-auto">
+        <div className="shrink-0 h-24 md:h-32 w-auto flex items-center justify-center min-w-[120px] bg-white/5 rounded-lg overflow-hidden border border-white/5">
           <img 
             src="https://raw.githubusercontent.com/zencane/Composition/refs/heads/main/media/premierlogo2.png" 
             alt="Premier Logo"
-            className="h-24 md:h-32 w-auto drop-shadow-[0_0_20px_rgba(255,70,85,0.4)] transition-opacity duration-1000" 
+            className="h-full w-auto drop-shadow-[0_0_20px_rgba(255,70,85,0.4)] opacity-0 transition-opacity duration-1000" 
             onLoad={(e) => (e.target as HTMLImageElement).classList.add('opacity-100')}
-            onError={(e) => (e.target as HTMLImageElement).src = "https://placehold.co/200x200/0f1923/ff4655?text=PREMIER"}
+            onError={(e) => (e.target as HTMLImageElement).src = "https://placehold.co/200x200/eac783/fcf6ec?text=PREMIER"}
           />
         </div>
       </header>
@@ -357,7 +357,7 @@ const App: React.FC = () => {
                       : 'border-white/10 hover:border-white/30'
                   } bg-[#1a252e]`}
                 >
-                  <div className="absolute inset-0 z-0">
+                  <div className="absolute inset-0 z-0 bg-[#0f1923]">
                     <img 
                       src={map.splash} 
                       alt="" 
@@ -394,7 +394,7 @@ const App: React.FC = () => {
               </button>
           </div>
           {isCompVisible && (
-            <div className="grid gap-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="grid gap-12">
               {activeMaps.map(map => (
                 <MapCompRow key={map.uuid} map={map} allPlayers={allPlayers} allAgents={agents} comp={mapComps.find(c => c.mapId === map.uuid)?.slots || []} onUpdateSlot={updateMapSlot} />
               ))}
