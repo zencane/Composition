@@ -25,6 +25,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          # Removed cache: 'npm' because package-lock.json might not be committed yet
       - name: Install dependencies
         run: npm install
       - name: Build
