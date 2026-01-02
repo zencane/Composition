@@ -11,7 +11,6 @@ const App: React.FC = () => {
   const [maps, setMaps] = useState<MapData[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Set to false by default as per user request to "cascade" (collapse) the big section
   const [isCompVisible, setIsCompVisible] = useState(false);
   
   const [teamName, setTeamName] = useState(() => {
@@ -60,7 +59,7 @@ const App: React.FC = () => {
         setMaps(mapsData);
 
         const savedComps = localStorage.getItem('valorant_map_comps');
-        if (!savedComps || JSON.parse(savedComps).length === 0) {
+        if (!savedComps) {
           const initialComps = mapsData.map(map => ({
             mapId: map.uuid,
             slots: Array.from({ length: 5 }, (_, i) => ({
@@ -72,8 +71,8 @@ const App: React.FC = () => {
         }
         
         const savedActive = localStorage.getItem('valorant_active_maps');
-        // If no saved maps OR if the saved array is empty, force the default Next Act selection
-        if (!savedActive || JSON.parse(savedActive).length === 0) {
+        // Logic Fix: Only force defaults if key is missing (null), not just empty ([])
+        if (savedActive === null) {
           const nextActMaps = ['Split', 'Pearl', 'Abyss', 'Corrode', 'Haven', 'Breeze', 'Bind'];
           const defaultIds = mapsData
             .filter(m => nextActMaps.includes(m.displayName))
@@ -82,7 +81,6 @@ const App: React.FC = () => {
           if (defaultIds.length > 0) {
             setActiveMapIds(defaultIds);
           } else {
-            // Fallback to all maps only if the rotation list found nothing (e.g. API names differ)
             setActiveMapIds(mapsData.map(m => m.uuid));
           }
         }
@@ -129,9 +127,6 @@ const App: React.FC = () => {
   }, []);
 
   const toggleAgentInPool = useCallback((playerId: string, agentId: string) => {
-    const currentPlayer = [...mainRoster, ...subRoster].find(p => p.id === playerId);
-    const isRemoving = currentPlayer?.agentPool.includes(agentId);
-
     const update = (prev: Player[]) => prev.map(p => {
       if (p.id !== playerId) return p;
       const newPool = p.agentPool.includes(agentId)
@@ -143,15 +138,17 @@ const App: React.FC = () => {
     if (playerId.startsWith('main')) setMainRoster(update);
     else setSubRoster(update);
 
-    if (isRemoving) {
-      setMapComps(prev => prev.map(comp => ({
-        ...comp,
-        slots: comp.slots.map(slot => 
-          (slot.playerId === playerId && slot.agentId === agentId)
-            ? { ...slot, agentId: '' }
-            : slot
-        )
-      })));
+    // If removing, clear from maps
+    const currentPlayer = [...mainRoster, ...subRoster].find(p => p.id === playerId);
+    if (currentPlayer?.agentPool.includes(agentId)) {
+        setMapComps(prev => prev.map(comp => ({
+          ...comp,
+          slots: comp.slots.map(slot => 
+            (slot.playerId === playerId && slot.agentId === agentId)
+              ? { ...slot, agentId: '' }
+              : slot
+          )
+        })));
     }
   }, [mainRoster, subRoster]);
 
@@ -354,11 +351,8 @@ const App: React.FC = () => {
             </h2>
             <button 
               onClick={() => {
-                if (isCompVisible) {
-                  handleHidePicker();
-                } else {
-                  setIsCompVisible(true);
-                }
+                if (isCompVisible) handleHidePicker();
+                else setIsCompVisible(true);
               }}
               className={`px-6 py-2 rounded transition-all text-xs font-black uppercase tracking-widest border ${
                 isCompVisible 
@@ -400,17 +394,19 @@ const App: React.FC = () => {
           ) : (
             <div 
               onClick={() => setIsCompVisible(true)}
-              className="group cursor-pointer py-16 text-center border-2 border-dashed border-gray-800 rounded-xl hover:border-[#ff4655]/50 transition-all bg-[#16202a]/50"
+              className="group cursor-pointer py-16 text-center border-2 border-dashed border-gray-800 rounded-xl hover:border-[#ff4655]/50 transition-all bg-[#16202a]/50 flex flex-col items-center justify-center gap-4 animate-subtle-pulse"
             >
-              <p className="text-white font-black uppercase tracking-[0.2em] italic group-hover:text-[#ff4655] transition-colors drop-shadow-lg">
-                Section collapsed. Click here to expand Team Composition Per Map
+              <div className="w-12 h-12 rounded-full border-2 border-dashed border-gray-600 flex items-center justify-center group-hover:border-[#ff4655] transition-colors">
+                 <span className="text-2xl text-gray-500 group-hover:text-[#ff4655]">+</span>
+              </div>
+              <p className="text-white font-black uppercase tracking-[0.25em] italic group-hover:text-[#ff4655] transition-colors drop-shadow-lg text-lg">
+                Section collapsed. Click to expand Team Composition Per Map
               </p>
             </div>
           )}
         </div>
       </section>
 
-      {/* Visual Board / Final Picker Overview */}
       <section ref={smartViewRef} className="pt-12 border-t border-gray-800 scroll-mt-12">
         <FinalRosterOverview 
           activeMaps={activeMaps}
