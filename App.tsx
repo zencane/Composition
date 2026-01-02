@@ -206,7 +206,7 @@ const App: React.FC = () => {
         </div>
         <div className="shrink-0">
           <img 
-            src="media/premierlogo.webp" 
+            src="media/premierlogo2.png" 
             alt="Premier Logo" 
             className="h-20 md:h-28 w-auto drop-shadow-[0_0_15px_rgba(255,70,85,0.2)]" 
             onError={(e) => {
