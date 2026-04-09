@@ -6,13 +6,12 @@ import MapCompRow from './components/MapCompRow';
 import FinalRosterOverview from './components/FinalRosterOverview';
 
 const PREMIER_SCHEDULE = [
-  { week: '01', name: 'Split', dates: 'JAN 14 — 18', color: '#B2FF9E' },
-  { week: '02', name: 'Breeze', dates: 'JAN 21 — 25', color: '#FFB08E' },
-  { week: '03', name: 'Pearl', dates: 'JAN 28 — FEB 1', color: '#B2FF9E' },
-  { week: '04', name: 'Bind', dates: 'FEB 4 — 8', color: '#FFB08E' },
-  { week: '05', name: 'Abyss', dates: 'FEB 11 — 15', color: '#B2FF9E' },
-  { week: '06', name: 'Corrode', dates: 'FEB 18 — 22', color: '#FFB08E' },
-  { week: '07', name: 'Haven', dates: 'FEB 25 — 28', color: '#B2FF9E' },
+  { week: '01', name: 'Haven', dates: 'MAR 18 — 22', color: '#B2FF9E' },
+  { week: '02', name: 'Fracture', dates: 'MAR 25 — 29', color: '#FFB08E' },
+  { week: '03', name: 'Lotus', dates: 'APR 1 — 5', color: '#B2FF9E' },
+  { week: '04', name: 'Split', dates: 'APR 8 — 12', color: '#FFB08E' },
+  { week: '05', name: 'Bind', dates: 'APR 15 — 19', color: '#B2FF9E' },
+  { week: '06', name: 'Breeze', dates: 'APR 22 — 25', color: '#FFB08E' },
 ];
 
 const STORAGE_KEYS = {
@@ -339,7 +338,7 @@ const App: React.FC = () => {
 
           <section className="space-y-8 pt-12 border-t border-gray-800">
             <div className="flex flex-col gap-8 text-center">
-                <h2 className="text-6xl md:text-7xl font-black uppercase tracking-widest italic text-white leading-none">EPISODE 2026 ACT I</h2>
+                <h2 className="text-6xl md:text-7xl font-black uppercase tracking-widest italic text-white leading-none">EPISODE 2026 Act II</h2>
                 <p className="text-lg font-bold text-[#ff4655] tracking-[0.5em] uppercase">Premier Schedule Selection</p>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 w-full px-4 md:px-0">
@@ -410,7 +409,7 @@ const App: React.FC = () => {
           </section>
 
           <footer className="text-center py-12 text-gray-500 text-sm font-black uppercase italic border-t border-gray-800 mt-24 tracking-[0.3em]">
-            Premier Agent Pool Visualizer Tool // Episode 2026 Act I
+            Premier Agent Pool Visualizer Tool // Episode 2026 Act II
           </footer>
         </div>
       </div>
